@@ -8,6 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import BufferedInputFile
+import datetime
 
 API_TOKEN = ''
 GEMINI_API_KEY = ""
@@ -40,7 +41,7 @@ async def send_text_as_file(message, text, filename="response.md"):
     file_bytes = text.encode("utf-8")
     input_file = BufferedInputFile(file_bytes, filename)
     await message.answer_document(input_file, caption="Ваш полный ответ в файле.")
-    return input_file  # Для пересылки в канал
+    return input_file  
 
 @router.message(Command("start"))
 async def start_handler(message: Message, state: FSMContext):
@@ -56,7 +57,6 @@ async def start_handler(message: Message, state: FSMContext):
 
 @router.message(Command("extrac"))
 async def extrac_start(message: Message, state: FSMContext):
-    # Если пользователь уже в состоянии, сбросить его
     await state.clear()
     await message.answer(
         "Напиши мне свой:\n\n"
@@ -68,7 +68,6 @@ async def extrac_start(message: Message, state: FSMContext):
 
 @router.message(Command("asis"))
 async def asis_start(message: Message, state: FSMContext):
-    # Если пользователь уже в состоянии, сбросить его
     await state.clear()
     await message.answer(
         "Я твой лучший ассистент для поступления! 😊\n\n"
@@ -158,6 +157,22 @@ async def asis_process(message: Message, state: FSMContext):
         )
     await state.clear()
 
+async def periodic_broadcast():
+    while True:
+        await bot.send_message(
+            chat_id=AI_CHANNEL_ID,
+            text=(
+                "Всем привет 👋\n"
+                "Как вам бот?\n"
+                "Будем рады обратной связи и пожеланиям 😊\n"
+                "Это вы можете сделать у нас в канале - ссылка"
+            )
+        )
+        await asyncio.sleep(14 * 24 * 60 * 60) 
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(dp.start_polling(bot))
+    asyncio.run(asyncio.gather(
+        dp.start_polling(bot),
+        periodic_broadcast()
+    ))
