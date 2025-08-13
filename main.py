@@ -191,7 +191,7 @@ async def periodic_broadcast():
                             "Всем привет 👋\n"
                             "Как вам бот?\n"
                             "Будем рады обратной связи и пожеланиям 😊\n"
-                            "Это вы можете сделать у нас в канале - https://www.instagram.com/apply.with.ai?igsh=MXQ3enhoeWFnb2g2"
+                            "Это вы можете сделать у нас в канале - https://t.me/applywithai"
                         )
                     )
                 except Exception as e:
@@ -199,13 +199,27 @@ async def periodic_broadcast():
         except Exception as e:
             print(f"Ошибка получения id из базы: {e}")
         await asyncio.sleep(14 * 24 * 60 * 60)  # 2 недели
-        
-    
+
+async def one_time_broadcast():
+    try:
+        data = supabase.table("users").select("id").execute()
+        for row in data.data:
+            try:
+                await bot.send_message(
+                    chat_id=row["id"],
+                    text=(
+                        "Извините за спам, я впервые научился отправлять такие сообщения 😭\n"
+                        "Вот ссылка на телеграмм канал: https://t.me/applywithai"
+                    )
+                )
+            except Exception as e:
+                print(f"Ошибка отправки в чат {row['id']}: {e}")
+    except Exception as e:
+        print(f"Ошибка получения id из базы: {e}")
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     async def main():
-        await asyncio.gather(
-            dp.start_polling(bot),
-            periodic_broadcast()
-        )
+        await one_time_broadcast()  # <-- временно для разовой рассылки
+        await dp.start_polling(bot)
     asyncio.run(main())
