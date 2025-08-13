@@ -11,13 +11,13 @@ from aiogram.types import BufferedInputFile
 import datetime
 from supabase import create_client, Client
 
-SUPABASE_URL = "://..co"
-SUPABASE_API_KEY = "..-n--"
+SUPABASE_URL = "https://..co"
+SUPABASE_API_KEY = "..-n--xvIF2nWjU"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
 API_TOKEN = ':-'
-GEMINI_API_KEY = "--"
+GEMINI_API_KEY = "-"
 AI_CHANNEL_ID = '-'
 
 bot = Bot(token=API_TOKEN)
@@ -220,6 +220,9 @@ async def one_time_broadcast():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     async def main():
-        await one_time_broadcast()  # <-- временно для разовой рассылки
-        await dp.start_polling(bot)
+        await one_time_broadcast()
+        await asyncio.gather(
+            dp.start_polling(bot),
+            periodic_broadcast()
+        )
     asyncio.run(main())
