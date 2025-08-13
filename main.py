@@ -9,10 +9,16 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import BufferedInputFile
 import datetime
+from supabase import create_client, Client
 
-API_TOKEN = ''
-GEMINI_API_KEY = ""
-AI_CHANNEL_ID = ''
+SUPABASE_URL = "://..co"
+SUPABASE_API_KEY = "..-n--"
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
+
+API_TOKEN = ':-'
+GEMINI_API_KEY = "--"
+AI_CHANNEL_ID = '-'
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
@@ -96,7 +102,7 @@ async def extrac_process(message: Message, state: FSMContext):
 
 Тон: практичный, честный, ориентированный на результат. Дай примеры, которые легко адаптировать под Common App/университетские эссе и интервью.
 
-Строгое правило: не использовать никакие элементы форматирования и не добавлять служебные фразы вроде “список ниже” или “пункты”; выдавать только связный текст, готовый к копированию в обычный текстовый файл. ОБЯЗАТЕЛЬНО НЕ ИСПОЛЬЗУЙ СПИСКИ (Никакие).
+Строгое правило: не использовать никакие элементы форматирования и не добавлять служебных фраз вроде “список ниже” или “пункты”; выдавать только связный текст, готовый к копированию в обычный текстовый файл. ОБЯЗАТЕЛЬНО НЕ ИСПОЛЬЗУЙ СПИСКИ (Никакие).
 """
     result = await gemini_query(prompt)
     await bot.delete_message(chat_id=message.chat.id, message_id=wait_msg.message_id)
@@ -157,22 +163,49 @@ async def asis_process(message: Message, state: FSMContext):
         )
     await state.clear()
 
+@router.message()
+async def save_chat_id(message: Message):
+    user_id = message.chat.id
+    username = message.from_user.username or ""
+    try:
+        data = supabase.table("users").select("id").eq("id", user_id).execute()
+        if not data.data:
+            # Новый пользователь — добавить
+            supabase.table("users").insert({"id": user_id, "username": username}).execute()
+        else:
+            # Уже есть — обновить username, если изменился
+            if data.data[0].get("username") != username:
+                supabase.table("users").update({"username": username}).eq("id", user_id).execute()
+    except Exception as e:
+        print(f"Ошибка при сохранении id: {e}")
+
 async def periodic_broadcast():
     while True:
-        await bot.send_message(
-            chat_id=AI_CHANNEL_ID,
-            text=(
-                "Всем привет 👋\n"
-                "Как вам бот?\n"
-                "Будем рады обратной связи и пожеланиям 😊\n"
-                "Это вы можете сделать у нас в канале - ссылка"
-            )
-        )
-        await asyncio.sleep(14 * 24 * 60 * 60) 
-
+        try:
+            data = supabase.table("users").select("id").execute()
+            for row in data.data:
+                try:
+                    await bot.send_message(
+                        chat_id=row["id"],
+                        text=(
+                            "Всем привет 👋\n"
+                            "Как вам бот?\n"
+                            "Будем рады обратной связи и пожеланиям 😊\n"
+                            "Это вы можете сделать у нас в канале - https://www.instagram.com/apply.with.ai?igsh=MXQ3enhoeWFnb2g2"
+                        )
+                    )
+                except Exception as e:
+                    print(f"Ошибка отправки в чат {row['id']}: {e}")
+        except Exception as e:
+            print(f"Ошибка получения id из базы: {e}")
+        await asyncio.sleep(14 * 24 * 60 * 60)  # 2 недели
+        
+    
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(asyncio.gather(
-        dp.start_polling(bot),
-        periodic_broadcast()
-    ))
+    async def main():
+        await asyncio.gather(
+            dp.start_polling(bot),
+            periodic_broadcast()
+        )
+    asyncio.run(main())
