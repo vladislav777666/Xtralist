@@ -2,7 +2,7 @@ import asyncio
 import aiohttp
 import logging
 from aiogram import Bot, Dispatcher, Router, F
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
@@ -11,14 +11,15 @@ from aiogram.types import BufferedInputFile
 import datetime
 from supabase import create_client, Client
 
-SUPABASE_URL = "https://..co"
-SUPABASE_API_KEY = "..-n--xvIF2nWjU"
+SUPABASE_URL = ""
+SUPABASE_API_KEY = ""
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
-API_TOKEN = ':-'
-GEMINI_API_KEY = "-"
-AI_CHANNEL_ID = '-'
+API_TOKEN = ''
+GEMINI_API_KEY = ""
+AI_CHANNEL_ID = ''
+CHANNEL_ID = '' 
 
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
@@ -43,7 +44,7 @@ async def gemini_query(prompt: str) -> str:
                 return "⚠️ Не удалось обработать ответ от сервера."
             return data["candidates"][0]["content"]["parts"][0]["text"]
 
-async def send_text_as_file(message, text, filename="response.md"):
+async def send_text_as_file(message, text, filename="response.txt"):
     file_bytes = text.encode("utf-8")
     input_file = BufferedInputFile(file_bytes, filename)
     await message.answer_document(input_file, caption="Ваш полный ответ в файле.")
@@ -61,7 +62,26 @@ async def start_handler(message: Message, state: FSMContext):
         "tg: https://t.me/applywithai"
     )
 
+async def is_subscribed(user_id):
+    try:
+        member = await bot.get_chat_member(CHANNEL_ID, user_id)
+        return member.status in ("member", "administrator", "creator")
+    except Exception:
+        return False
+
+def require_subscription(handler):
+    async def wrapper(message: Message, state: FSMContext):
+        if not await is_subscribed(message.from_user.id):
+            await message.answer(
+                "Для использования этой функции подпишитесь на канал!",
+                reply_markup=subscribe_keyboard
+            )
+            return
+        await handler(message, state)
+    return wrapper
+
 @router.message(Command("extrac"))
+@require_subscription
 async def extrac_start(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(
@@ -73,6 +93,7 @@ async def extrac_start(message: Message, state: FSMContext):
     await state.set_state(Form.exctracur)
 
 @router.message(Command("asis"))
+@require_subscription
 async def asis_start(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(
@@ -106,7 +127,7 @@ async def extrac_process(message: Message, state: FSMContext):
 """
     result = await gemini_query(prompt)
     await bot.delete_message(chat_id=message.chat.id, message_id=wait_msg.message_id)
-    input_file = await send_text_as_file(message, result, filename="extrac.md")
+    input_file = await send_text_as_file(message, result, filename="extrac.txt")
     if AI_CHANNEL_ID:
         await bot.send_document(
             chat_id=AI_CHANNEL_ID,
@@ -154,7 +175,7 @@ async def asis_process(message: Message, state: FSMContext):
 """
     result = await gemini_query(prompt)
     await bot.delete_message(chat_id=message.chat.id, message_id=wait_msg.message_id)
-    input_file = await send_text_as_file(message, result, filename="asis.md")
+    input_file = await send_text_as_file(message, result, filename="asis.txt")
     if AI_CHANNEL_ID:
         await bot.send_document(
             chat_id=AI_CHANNEL_ID,
@@ -179,6 +200,24 @@ async def save_chat_id(message: Message):
     except Exception as e:
         print(f"Ошибка при сохранении id: {e}")
 
+# Клавиатура для подписки на канал
+subscribe_keyboard = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="Подписаться на канал",
+                url="https://t.me/applywithai"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="Проверить подписку",
+                callback_data="check_sub"
+            )
+        ]
+    ]
+)
+
 async def periodic_broadcast():
     while True:
         try:
@@ -192,7 +231,8 @@ async def periodic_broadcast():
                             "Как вам бот?\n"
                             "Будем рады обратной связи и пожеланиям 😊\n"
                             "Это вы можете сделать у нас в канале - https://t.me/applywithai"
-                        )
+                        ),
+                        reply_markup=subscribe_keyboard
                     )
                 except Exception as e:
                     print(f"Ошибка отправки в чат {row['id']}: {e}")
@@ -216,10 +256,30 @@ async def one_time_broadcast():
     except Exception as e:
         print(f"Ошибка получения id из базы: {e}")
 
+@router.callback_query(F.data == "check_sub")
+async def check_subscription(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+    if await is_subscribed(user_id):
+        await callback.answer("✅ Вы подписаны на канал!", show_alert=True)
+        await callback.message.answer("Спасибо за подписку! Теперь вы можете пользоваться ботом.")
+    else:
+        await callback.answer("❌ Вы не подписаны на канал!", show_alert=True)
+
+def require_subscription(handler):
+    async def wrapper(message: Message, state: FSMContext):
+        if not await is_subscribed(message.from_user.id):
+            await message.answer(
+                "Для использования этой функции подпишитесь на канал!",
+                reply_markup=subscribe_keyboard
+            )
+            return
+        await handler(message, state)
+    return wrapper
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     async def main():
-        await one_time_broadcast()
+#        await one_time_broadcast()
         await asyncio.gather(
             dp.start_polling(bot),
             periodic_broadcast()
